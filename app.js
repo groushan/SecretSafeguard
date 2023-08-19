@@ -9,6 +9,20 @@ const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
+const MongoStore = require("connect-mongo");
+const sessionopt={
+    // name:"ghsdg",
+    store: MongoStore.create({ mongoUrl: process.env.MONGOURL,touchAfter: 24 * 3600}),
+    secret:'thisisnotagoodsecret',
+    resave:false,
+    saveUnitialized:true,
+    cookie:{
+        httponly:true,
+        // secure:true,
+        expires:Date.now()+1000*60*60*24*7,
+        age:1000*60*60*24*7
+    }
+}
 
 const app = express();
 
@@ -18,11 +32,7 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 
-app.use(session({
-  secret: "Our little secret.",
-  resave: false,
-  saveUninitialized: false
-}));
+app.use(session(sessionopt));
 app.use((req, res, next) => {
   console.log(req.url, req.method);
   next();
@@ -64,7 +74,7 @@ passport.deserializeUser(function(id, done) {
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: "http://localhost:3000/auth/google/secrets",
+    callbackURL: "https://secretsafeguard.onrender.com/auth/google/secrets",
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
