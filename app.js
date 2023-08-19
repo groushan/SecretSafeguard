@@ -23,11 +23,18 @@ app.use(session({
   resave: false,
   saveUninitialized: false
 }));
-
+app.use((req, res, next) => {
+  console.log(req.url, req.method);
+  next();
+})
 app.use(passport.initialize());
 app.use(passport.session());
-
-mongoose.connect("mongodb://localhost:27017/userDB", {useNewUrlParser: true});
+// console.log(process.env.MONGOURL)
+mongoose.connect(process.env.MONGOURL, { useNewUrlParser: true }).then(() => {
+  console.log("DataBase Connected");
+}).catch((err) => {
+  console.log(err);
+})
 mongoose.set("useCreateIndex", true);
 
 const userSchema = new mongoose.Schema ({
@@ -61,7 +68,7 @@ passport.use(new GoogleStrategy({
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
-    console.log(profile);
+    // console.log(profile);
 
     User.findOrCreate({ googleId: profile.id }, function (err, user) {
       return cb(err, user);
@@ -133,7 +140,9 @@ app.post("/submit", function(req, res){
 });
 
 app.get("/logout", function(req, res){
-  req.logout();
+  req.logout(() => {
+    console.log("User Logged Out");
+  });
   res.redirect("/");
 });
 
