@@ -9,20 +9,6 @@ const passport = require("passport");
 const passportLocalMongoose = require("passport-local-mongoose");
 const GoogleStrategy = require('passport-google-oauth20').Strategy;
 const findOrCreate = require('mongoose-findorcreate');
-const MongoStore = require("connect-mongo");
-const sessionopt={
-    // name:"ghsdg",
-    store: MongoStore.create({ mongoUrl: process.env.MONGOURL,touchAfter: 24 * 3600}),
-    secret:'thisisnotagoodsecret',
-    resave:false,
-    saveUnitialized:true,
-    cookie:{
-        httponly:true,
-        // secure:true,
-        expires:Date.now()+1000*60*60*24*7,
-        age:1000*60*60*24*7
-    }
-}
 
 const app = express();
 
@@ -32,7 +18,11 @@ app.use(bodyParser.urlencoded({
   extended: true
 }));
 
-app.use(session(sessionopt));
+app.use(session({
+  secret: "Our little secret.",
+  resave: false,
+  saveUninitialized: false
+}));
 app.use((req, res, next) => {
   console.log(req.url, req.method);
   next();
@@ -40,7 +30,7 @@ app.use((req, res, next) => {
 app.use(passport.initialize());
 app.use(passport.session());
 // console.log(process.env.MONGOURL)
-mongoose.connect(process.env.MONGOURL, { useNewUrlParser: true }).then(() => {
+mongoose.connect(process.env.MONGO_URL, { useNewUrlParser: true }).then(() => {
   console.log("DataBase Connected");
 }).catch((err) => {
   console.log(err);
@@ -51,7 +41,7 @@ const userSchema = new mongoose.Schema ({
   email: String,
   password: String,
   googleId: String,
-  secret: String
+  secrets: [String]
 });
 
 userSchema.plugin(passportLocalMongoose);
@@ -74,7 +64,7 @@ passport.deserializeUser(function(id, done) {
 passport.use(new GoogleStrategy({
     clientID: process.env.CLIENT_ID,
     clientSecret: process.env.CLIENT_SECRET,
-    callbackURL: "https://secretsafeguard.onrender.com/auth/google/secrets",
+    callbackURL: "https://secretsafeguard.onrender.com/auth/google/callback",
     userProfileURL: "https://www.googleapis.com/oauth2/v3/userinfo"
   },
   function(accessToken, refreshToken, profile, cb) {
@@ -110,13 +100,11 @@ app.get("/register", function(req, res){
 });
 
 app.get("/secrets", function(req, res){
-  User.find({"secret": {$ne: null}}, function(err, foundUsers){
+  User.find({ "secrets.0": { $exists: true } }, function(err, foundUsers){
     if (err){
       console.log(err);
     } else {
-      if (foundUsers) {
-        res.render("secrets", {usersWithSecrets: foundUsers});
-      }
+      res.render("secrets", { usersWithSecrets: foundUsers });
     }
   });
 });
@@ -132,15 +120,12 @@ app.get("/submit", function(req, res){
 app.post("/submit", function(req, res){
   const submittedSecret = req.body.secret;
 
-//Once the user is authenticated and their session gets saved, their user details are saved to req.user.
-  // console.log(req.user.id);
-
   User.findById(req.user.id, function(err, foundUser){
     if (err) {
       console.log(err);
     } else {
       if (foundUser) {
-        foundUser.secret = submittedSecret;
+        foundUser.secrets.push(submittedSecret); // push instead of replace
         foundUser.save(function(){
           res.redirect("/secrets");
         });
@@ -148,6 +133,7 @@ app.post("/submit", function(req, res){
     }
   });
 });
+
 
 app.get("/logout", function(req, res){
   req.logout(() => {
